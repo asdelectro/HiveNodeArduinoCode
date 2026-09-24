@@ -16,6 +16,7 @@ More info: https://hivenode.net
 | `example_02_gps/` | ATGM336H-5NR-32 GPS via the shared UART multiplexer |
 | `example_03_bluetooth/` | E104-BT52 BLE module, AT command interface, via the same multiplexer |
 | `example_04_rs485_modbus/` | RS485 Modbus RTU master, via the same multiplexer |
+| `example_06_accelerometer/` | LIS2DW12 accelerometer, hardware wake-on-motion via raw I2C registers |
 
 Each example is self-contained and can be opened directly in the
 Arduino IDE with the RAKwireless RUI3 board package installed
@@ -155,6 +156,40 @@ at the top of `example_01_sensors_sleep.ino`, summarized here:
   each active phase briefly draws several mA — for real deployments,
   increase the timer interval (60–600s) to bring the duty-cycle
   average down; it does not affect the sleep floor itself.
+
+## Example 06 — Accelerometer wake-on-motion
+
+Direct I2C register access to the LIS2DW12 (no library), configuring
+hardware wake-up-on-motion and polling `INT1`. Full details are in
+the comment block at the top of `example_06_accelerometer.ino`,
+summarized here:
+
+- `WHO_AM_I` (register `0x0F`) reads back `0x44` for the LIS2DW12 —
+  don't confuse this with the SHT40's *I2C address* (also `0x44` on
+  this board's bus, but a completely different register on a
+  different chip). Always check `WHO_AM_I`, not just the bus-scan
+  address.
+- `CTRL7`'s `INTERRUPTS_ENABLE` bit (`0x20`) is mandatory. Every
+  other register (`CTRL3`, `CTRL4_INT1`, `WAKE_THS`, `WAKE_DUR`) can
+  be configured correctly and `INT1` will still never go high
+  without this one — with no other error indication.
+- `WAKE_SRC` (register `0x38`, cleared on read) bit layout:
+
+  | Bit | Meaning |
+  |---|---|
+  | 0 | Z-axis wake-up event |
+  | 1 | Y-axis wake-up event |
+  | 2 | X-axis wake-up event |
+  | 3 | WU_IA — wake-up event active (set whenever any axis triggers) |
+
+  e.g. `0x0C` = X + WU_IA, `0x0B` = Y + Z + WU_IA.
+- This example polls `INT1` directly in `loop()` rather than using
+  `attachInterrupt()`, to keep the register-level behaviour visible
+  for this Level 1 example.
+- `CTRL1 = 0x21` (12.5 Hz, Low-Power Mode 1) keeps the
+  accelerometer's own current draw low, but only sleeps the
+  accelerometer itself — it does not put the MCU to sleep; combine
+  with the pattern in `example_01_sensors_sleep.ino` for that.
 
 ## License
 
